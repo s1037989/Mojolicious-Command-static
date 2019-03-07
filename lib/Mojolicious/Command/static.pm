@@ -3,13 +3,14 @@ use Mojo::Base 'Mojolicious::Command';
 
 # This command is a copy of Mojolicious::Command::daemon
 
-use Getopt::Long qw(GetOptionsFromArray :config no_auto_abbrev no_ignore_case);
+use Mojo::File 'path';
 use Mojo::Server::Daemon;
+
+use Getopt::Long qw(GetOptionsFromArray :config no_auto_abbrev no_ignore_case);
+use File::Basename;
 
 has description => 'Quickly serve static files';
 has usage => sub { shift->extract_usage };
-
-use File::Basename;
 
 sub run {
   my ($self, @args) = @_;
@@ -26,18 +27,18 @@ sub run {
   push @{$daemon->app->renderer->classes}, __PACKAGE__;
 
   # Add all the paths and paths of filenames specified on the command line
-  $daemon->app->static->paths([grep { -d $_ } map { -f $_ ? dirname $_ : $_ } @args, '.']);
+  $daemon->app->static->paths([grep { -d $_ } map { -f $_ ? dirname $_ : $_ } @args]);
 
   # Create numeric shortcuts for each filename specified on the command line
   my @files;
-  foreach my $file ( grep { -f $_ } @args ) {
-    push @files, basename $file;
-    $daemon->app->routes->get('/'.($#files+1))->to(cb=>sub {
-      my $c = shift;
-      $c->res->headers->content_disposition(sprintf "attachment; filename=%s;", basename $file);
-      $c->reply->asset(Mojo::Asset::File->new(path => $file));
-    });
+  foreach my $path ( map { path($_) } @args ) {
+    if ( -d $path ) {
+      $path->list_tree->each(sub{push @files, $_->to_rel($_->to_array->[0])});
+    } else {
+      push @files, $path->to_rel($path->to_array->[0]);
+    }
   }
+  $daemon->app->log->info(sprintf '%d files', $#files+1);
 
   # Build an index of the available specified files
   $daemon->app->routes->get('/')->name('index')->to(files => \@files);
@@ -109,8 +110,7 @@ L<Mojolicious>, L<Mojolicious::Guides>, L<http://mojolicio.us>.
 
 __DATA__
 @@ index.html.ep
-% my $c = 0;
 <p>List of static files available for download</p>
 % foreach ( @$files ) {
-  <a href="/<%= ++$c %>"><%= $_ %></a><br />
+  <a href="/<%= $_ %>"><%= $_ %></a><br />
 % }
