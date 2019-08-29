@@ -29,23 +29,19 @@ sub run {
   push @{$daemon->app->renderer->classes}, __PACKAGE__;
 
   # Add all the paths and paths of filenames specified on the command line
+  push @args, '.' unless @args;
   $daemon->app->static->paths([grep { -d $_ } map { -f $_ ? dirname $_ : $_ } @args]);
 
   $daemon->app->max_request_size(10_000_000_000);
 
+  $daemon->app->helper(expand_args => \&_expand_args);
+
   # Create numeric shortcuts for each filename specified on the command line
-  my @files;
-  foreach my $path ( map { path($_) } @args ) {
-    if ( -d $path ) {
-      $path->list_tree->each(sub{push @files, $_->to_rel($_->to_array->[0])});
-    } else {
-      push @files, $path->to_rel($path->to_array->[0]);
-    }
-  }
-  $daemon->app->log->info(sprintf '%d files', $#files+1);
+  my @files = $self->_expand_args(\@args);
+  $daemon->app->log->info(sprintf 'Currently %d files', $#files+1);
 
   # Build an index of the available specified files
-  $daemon->app->routes->get('/')->name('index')->to(files => \@files);
+  $daemon->app->routes->get('/')->name('index')->to(args => \@args);
   $daemon->app->hook(after_static => sub {
     my $c = shift;
     $c->app->log->info(sprintf 'GET %s', $c->req->url->path);
@@ -53,6 +49,20 @@ sub run {
 
   $daemon->listen(\@listen) if @listen;
   $daemon->run;
+}
+
+sub _expand_args {
+  my ($self, $args) = @_;
+  my @files;
+  foreach my $path ( map { path($_) } @$args ) {
+    if ( -d $path ) {
+      #$path->list_tree->each(sub{push @files, $_->to_rel($_->to_array->[0])});
+      $path->list_tree->each(sub{push @files, $_->to_rel($path)});
+    } else {
+      push @files, $path->to_rel($path->to_array->[0]);
+    }
+  }
+  return @files;
 }
 
 1;
@@ -118,7 +128,8 @@ L<Mojolicious>, L<Mojolicious::Guides>, L<http://mojolicio.us>.
 
 __DATA__
 @@ index.html.ep
-<p>List of static files available for download</p>
-% foreach ( @$files ) {
+% my @files = expand_args $args;
+<p>List of <%= $#files+1 %> static files available for download</p>
+% foreach ( @files ) {
   <a href="/<%= $_ %>"><%= $_ %></a><br />
 % }
