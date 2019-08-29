@@ -9,7 +9,7 @@ use Mojo::Server::Daemon;
 use Getopt::Long qw(GetOptionsFromArray :config no_auto_abbrev no_ignore_case);
 use File::Basename;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 has description => 'Quickly serve static files';
 has usage => sub { shift->extract_usage };
