@@ -8,7 +8,7 @@ WriteMakefile(
   VERSION_FROM => 'lib/Mojolicious/Command/static.pm',
   ABSTRACT     => 'Run a quick and dirty static files web server',
   AUTHOR       => 'Stefan Adams <sadams@cpan.org>',
-  LICENSE      => '',
+  LICENSE      => 'artistic_2',
   META_MERGE   => {
     dynamic_config => 0,
     'meta-spec'    => {version => 2},
