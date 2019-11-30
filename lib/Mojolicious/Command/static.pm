@@ -14,7 +14,7 @@ use List::MoreUtils 'uniq';
 # transfer, allow extremely large files;
 use constant MAX_SIZE => $ENV{STATIC_MAXSIZE} || 10_000_000_000;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 has description => 'Quickly serve static files';
 has usage => sub { shift->extract_usage };
