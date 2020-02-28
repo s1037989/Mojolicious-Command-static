@@ -3,7 +3,7 @@ use Mojo::Base 'Mojolicious::Command';
 
 # This command is a copy of Mojolicious::Command::daemon
 
-use Mojo::File 'path';
+use Mojo::File qw(curfile path tempdir);
 use Mojo::Server::Daemon;
 use Mojo::Util qw(decamelize getopt);
 
@@ -30,7 +30,10 @@ sub run {
     'l|listen=s'   => \my @listen,
     'p|proxy'      => sub { $daemon->reverse_proxy(1) },
     'r|requests=i' => sub { $daemon->max_requests($_[1]) },
-    'd|default=s'  => \my $default;
+    'd|default=s'  => \my $default,
+    'u|upload:s'   => \my $upload;
+  $upload ||= tempdir(CLEANUP => 0) if defined $upload;
+  $upload = path($upload) if $upload;
 
   push @{$daemon->app->renderer->classes}, __PACKAGE__;
 
@@ -41,7 +44,7 @@ sub run {
     for split /,/, $ENV{MOJOLICIOUS_PLUGINS} // '';
 
   # Add all the paths and paths of filenames specified on the command line
-  $app->static->paths(_static_paths(@args));
+  $app->static->paths(_static_paths(curfile->sibling->child('static', 'resources', 'public'), @args));
 
   $app->max_request_size(MAX_SIZE);
 
@@ -56,8 +59,21 @@ sub run {
   } else {
     $app->log->info('index directory listing');
     $app->routes->get('/')
-                ->to(files => \@files)
+                ->to(files => \@files, upload => $upload)
                 ->name('index');
+  }
+
+  if ( $upload ) {
+    $app->log->info("uploads to $upload");
+    $app->routes->get('/dropzone' => 'dropzone');
+    $app->routes->post('/dropzone/upload' => sub {
+      my $c = shift;
+      my $file = $c->req->upload('file');
+      my $save = $upload->child($file->filename);
+      $file->move_to($save);
+      $c->log->info("upload $save");
+      $c->render(json => {ok => 1});
+    });
   }
 
   # Log requests for static files
@@ -181,3 +197,27 @@ __DATA__
 % foreach ( @$files ) {
   <a href="/<%= url_for $_ %>"><%= $_ %></a><br />
 % }
+% if ( $upload ) {
+  <p><%= link_to 'Upload Files' => 'dropzone' %></p>
+% }
+
+@@ dropzone.html.ep
+<html>
+<head>
+%= stylesheet '/dropzone.css'
+%= stylesheet '/style.css'
+%= javascript '/dropzone.js'
+</head>
+<body>
+<p><%= link_to 'Index' => 'index' %></p>
+<div id="dropzone">
+%= form_for 'dropzoneupload' => (class => "dropzone needsclick dz-clickable", id => "demo-upload") => begin
+  <div>
+    <div class="dz-message needsclick">
+      Drop files here or click to upload.<br>
+    </div>
+  </div>
+% end
+</div>
+</body>
+</html>
