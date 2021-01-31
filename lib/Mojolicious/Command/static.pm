@@ -3,7 +3,7 @@ use Mojo::Base 'Mojolicious::Command';
 
 # This command is a copy of Mojolicious::Command::daemon
 
-use Mojo::File qw(curfile path tempdir);
+use Mojo::File qw(curfile path tempdir tempfile);
 use Mojo::Server::Daemon;
 use Mojo::Util qw(decamelize getopt);
 
@@ -68,10 +68,19 @@ sub run {
     $app->routes->get('/dropzone' => 'dropzone');
     $app->routes->post('/dropzone/upload' => sub {
       my $c = shift;
-      my $file = $c->req->upload('file');
-      my $save = $upload->child($file->filename);
-      $file->move_to($save);
-      $c->log->info("upload $save");
+      if ( my $file = $c->req->upload('file') ) {
+        my $save = $upload->child($file->filename);
+        $file->move_to($save);
+        $c->log->info("upload $save");
+      }
+      $c->render(json => {ok => 1});
+    });
+    $app->routes->post('/paste' => sub {
+      my $c = shift;
+      if ( my $paste = $c->param('paste') ) {
+        my $save = tempfile(DIR => $upload, UNLINK => 0)->spurt($paste);
+        $c->log->info("paste $save");
+      }
       $c->render(json => {ok => 1});
     });
   }
@@ -217,6 +226,10 @@ __DATA__
       Drop files here or click to upload.<br>
     </div>
   </div>
+% end
+%= form_for 'paste' => (method => 'POST') => begin
+  %= text_area 'paste'
+  %= submit_button
 % end
 </div>
 </body>
